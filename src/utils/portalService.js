@@ -1,14 +1,14 @@
 import {
   collection, doc, addDoc, updateDoc, deleteDoc,
-  getDocs, getDoc, query, where, orderBy,
+  getDocs, getDoc, query, where,
   serverTimestamp, writeBatch, onSnapshot,
 } from 'firebase/firestore';
 import {
   ref, uploadBytes, getDownloadURL, deleteObject,
 } from 'firebase/storage';
 import { db, storage } from '../firebase';
-import { assignGroups } from '../utils/shuffle';
-import { exportGroupsToExcel } from '../utils/exportExcel';
+import { assignGroups } from './shuffle';
+import { exportGroupsToExcel } from './exportExcel';
 
 // ── PORTALS ──
 
@@ -45,13 +45,23 @@ export function subscribeToPortal(portalId, callback) {
 }
 
 export function subscribeToUserPortals(userId, callback) {
+  // Using only where() to avoid needing a Firestore composite index.
+  // We sort client-side by createdAt instead.
   const q = query(
     collection(db, 'portals'),
-    where('ownerId', '==', userId),
-    orderBy('createdAt', 'desc')
+    where('ownerId', '==', userId)
   );
   return onSnapshot(q, (snap) => {
-    callback(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    const portals = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    portals.sort((a, b) => {
+      const aTime = a.createdAt?.toMillis?.() ?? 0;
+      const bTime = b.createdAt?.toMillis?.() ?? 0;
+      return bTime - aTime;
+    });
+    callback(portals);
+  }, (error) => {
+    console.error('subscribeToUserPortals error:', error.message);
+    callback([]);
   });
 }
 
@@ -74,16 +84,32 @@ export async function registerStudent(portalId, studentData) {
 }
 
 export async function getStudents(portalId) {
-  const snap = await getDocs(
-    query(collection(db, 'portals', portalId, 'students'), orderBy('registeredAt', 'desc'))
-  );
-  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  const snap = await getDocs(collection(db, 'portals', portalId, 'students'));
+  const students = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  students.sort((a, b) => {
+    const aTime = a.registeredAt?.toMillis?.() ?? 0;
+    const bTime = b.registeredAt?.toMillis?.() ?? 0;
+    return bTime - aTime;
+  });
+  return students;
 }
 
 export function subscribeToStudents(portalId, callback) {
   return onSnapshot(
-    query(collection(db, 'portals', portalId, 'students'), orderBy('registeredAt', 'desc')),
-    (snap) => callback(snap.docs.map(d => ({ id: d.id, ...d.data() })))
+    collection(db, 'portals', portalId, 'students'),
+    (snap) => {
+      const students = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      students.sort((a, b) => {
+        const aTime = a.registeredAt?.toMillis?.() ?? 0;
+        const bTime = b.registeredAt?.toMillis?.() ?? 0;
+        return bTime - aTime;
+      });
+      callback(students);
+    },
+    (error) => {
+      console.error('subscribeToStudents error:', error.message);
+      callback([]);
+    }
   );
 }
 
