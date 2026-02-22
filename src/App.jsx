@@ -10,6 +10,7 @@ import PortalSettings from './pages/PortalSettings';
 import Appearance from './pages/Appearance';
 import Questions from './pages/Questions';
 import PortalView from './pages/PortalView';
+import PortalDirectory from './pages/PortalDirectory';
 import AppLayout from './components/AppLayout';
 
 function ProtectedRoute({ children }) {
@@ -28,6 +29,7 @@ export default function App() {
       <Route path="/" element={<Landing />} />
       <Route path="/login" element={<Login />} />
       <Route path="/p/:slug" element={<PortalView />} />
+      <Route path="/portals" element={<PortalDirectory />} />
       <Route path="/app" element={
         <ProtectedRoute>
           <AppLayout />

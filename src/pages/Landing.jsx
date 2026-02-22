@@ -1,4 +1,7 @@
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { collection, getDocs } from 'firebase/firestore';
+import { db } from '../firebase';
 
 const features = [
   { tag: 'Core', icon: '🎲', title: 'True Random Shuffling', desc: 'Cryptographically random Fisher-Yates shuffle ensures every student has an equal chance of any group placement.' },
@@ -20,6 +23,30 @@ const steps = [
 ];
 
 export default function Landing() {
+  const [portals, setPortals] = useState([]);
+  const [search, setSearch] = useState('');
+  const [loadingPortals, setLoadingPortals] = useState(true);
+
+  useEffect(() => {
+    async function fetchPortals() {
+      try {
+        const snap = await getDocs(collection(db, 'portals'));
+        const all = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        all.sort((a, b) => (b.createdAt?.toMillis?.() ?? 0) - (a.createdAt?.toMillis?.() ?? 0));
+        setPortals(all);
+      } catch (e) {
+        console.error(e);
+      }
+      setLoadingPortals(false);
+    }
+    fetchPortals();
+  }, []);
+
+  const filteredPortals = portals.filter(p => {
+    const q = search.toLowerCase();
+    return !q || p.name?.toLowerCase().includes(q) || p.slug?.toLowerCase().includes(q) || p.description?.toLowerCase().includes(q);
+  });
+
   return (
     <div className="bg-ink text-paper min-h-screen">
       {/* NAV */}
@@ -28,6 +55,7 @@ export default function Landing() {
         <div className="hidden md:flex gap-8 text-sm text-paper/60">
           <a href="#features" className="hover:text-paper transition-colors">Features</a>
           <a href="#how" className="hover:text-paper transition-colors">How it works</a>
+          <a href="#portals" className="hover:text-paper transition-colors">Find a Portal</a>
           <a href="#pricing" className="hover:text-paper transition-colors">Pricing</a>
         </div>
         <div className="flex gap-3">
@@ -129,6 +157,102 @@ export default function Landing() {
               </div>
             ))}
           </div>
+        </div>
+      </section>
+
+
+      {/* PORTAL DIRECTORY SECTION */}
+      <section id="portals" className="border-t border-paper/10 py-24 px-8 md:px-16">
+        <div className="max-w-6xl mx-auto">
+          <div className="text-[11px] font-bold text-accent tracking-widest uppercase mb-4">Portal Directory</div>
+          <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-10">
+            <div>
+              <h2 className="font-syne text-4xl font-extrabold tracking-tight mb-2">Find Your Portal</h2>
+              <p className="text-paper/50 text-base max-w-lg">Search all active registration portals. Click one to register for your group — no account needed.</p>
+            </div>
+            <Link to="/portals" className="btn btn-ghost flex-shrink-0 text-sm px-5 py-2.5">
+              View all portals →
+            </Link>
+          </div>
+
+          {/* Search bar */}
+          <div className="relative max-w-lg mb-8">
+            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-paper/30 pointer-events-none">🔍</span>
+            <input
+              type="text"
+              className="w-full bg-paper/6 border border-paper/15 rounded-xl pl-11 pr-4 py-3.5 text-paper placeholder-paper/25 text-sm outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 transition-all"
+              placeholder="Search by class name or course code…"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+            />
+            {search && (
+              <button className="absolute right-3 top-1/2 -translate-y-1/2 text-paper/30 hover:text-paper/60 transition-colors" onClick={() => setSearch('')}>✕</button>
+            )}
+          </div>
+
+          {/* Portal cards */}
+          {loadingPortals ? (
+            <div className="grid md:grid-cols-3 gap-4">
+              {[...Array(3)].map((_, i) => (
+                <div key={i} className="bg-paper/4 border border-paper/10 rounded-2xl p-6 animate-pulse">
+                  <div className="h-4 bg-paper/10 rounded mb-3 w-3/4" />
+                  <div className="h-3 bg-paper/8 rounded mb-2 w-full" />
+                  <div className="h-3 bg-paper/8 rounded w-2/3" />
+                </div>
+              ))}
+            </div>
+          ) : filteredPortals.length === 0 ? (
+            <div className="text-center py-16 border border-paper/10 rounded-2xl">
+              <div className="text-4xl mb-3">🔍</div>
+              <div className="font-syne font-bold text-lg mb-1">{search ? `No portals matching "${search}"` : 'No portals available yet'}</div>
+              <div className="text-paper/40 text-sm">{search ? 'Try a different search term' : 'Portals created by instructors will appear here'}</div>
+            </div>
+          ) : (
+            <>
+              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+                {filteredPortals.slice(0, 6).map((portal, idx) => (
+                  <Link
+                    key={portal.id}
+                    to={`/p/${portal.slug}`}
+                    className="group block bg-paper/4 border border-paper/12 rounded-2xl overflow-hidden hover:border-paper/30 hover:-translate-y-1 hover:shadow-xl transition-all duration-300"
+                    style={{ animationDelay: `${idx * 0.06}s` }}
+                  >
+                    <div className="h-1" style={{ background: portal.isOpen ? (portal.accentColor || '#e85d26') : '#4b5563' }} />
+                    <div className="p-5">
+                      <div className="flex items-start justify-between gap-2 mb-2">
+                        <div className="font-syne font-bold text-sm text-paper leading-tight group-hover:text-accent transition-colors truncate">
+                          {portal.name}
+                        </div>
+                        {portal.isOpen ? (
+                          <span className="flex-shrink-0 flex items-center gap-1 bg-green-500/15 text-green-400 border border-green-500/20 px-2 py-0.5 rounded-full text-[10px] font-bold">
+                            <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />Open
+                          </span>
+                        ) : (
+                          <span className="flex-shrink-0 flex items-center gap-1 bg-paper/8 text-paper/30 border border-paper/12 px-2 py-0.5 rounded-full text-[10px] font-bold">
+                            <span className="w-1.5 h-1.5 rounded-full bg-paper/30" />Closed
+                          </span>
+                        )}
+                      </div>
+                      {portal.description && (
+                        <p className="text-paper/40 text-xs leading-relaxed mb-3 line-clamp-2">{portal.description}</p>
+                      )}
+                      <div className="flex items-center gap-3 text-[11px] text-paper/25 pt-3 border-t border-paper/8">
+                        <span>👥 {portal.studentCount || 0} registered</span>
+                        <span>🎲 {portal.groupSize || 4}/group</span>
+                      </div>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+              {filteredPortals.length > 6 && (
+                <div className="text-center">
+                  <Link to={`/portals${search ? `?q=${encodeURIComponent(search)}` : ''}`} className="btn btn-ghost px-6 py-2.5 text-sm">
+                    View all {filteredPortals.length} portals →
+                  </Link>
+                </div>
+              )}
+            </>
+          )}
         </div>
       </section>
 
